@@ -1,0 +1,106 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"). You
+# may not use this file except in compliance with the License. A copy of
+# the License is located at
+#
+#     http://aws.amazon.com/apache2.0/
+#
+# or in the "license" file accompanying this file. This file is
+# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+# ANY KIND, either express or implied. See the License for the specific
+# language governing permissions and limitations under the License.
+import json
+
+from awscli.testutils import BaseAWSCommandParamsTest
+
+# Operations that would create, modify or delete state. The command must never
+# issue any of these; the functional test asserts it.
+_MUTATING = {
+    'CreateLogGroup',
+    'DeleteLogGroup',
+    'PutLogEvents',
+    'PutRetentionPolicy',
+    'DeleteQueryDefinition',
+}
+
+# A window well in the past so it is never clamped to "now" and the single log
+# group (no retention policy) always holds data in it, keeping the test
+# deterministic regardless of the wall clock.
+_START = '2024-01-01T00:00:00Z'
+_END = '2024-01-01T01:00:00Z'
+
+
+class TestRunInsightsQueryCommand(BaseAWSCommandParamsTest):
+    def _lifecycle_responses(self):
+        return [
+            # 1. DescribeLogGroups resolves the group (no retention -> queryable).
+            {'logGroups': [{'logGroupName': '/aws/lambda/fn'}]},
+            # 2. StartQuery returns a non-blank queryId.
+            {'queryId': 'q-1'},
+            # 3. GetQueryResults returns a terminal, Complete result on the first
+            #    poll so the bounded poller never sleeps.
+            {
+                'status': 'Complete',
+                'results': [
+                    [
+                        {'field': '@message', 'value': 'hello'},
+                        {'field': '@ptr', 'value': 'p1'},
+                    ]
+                ],
+                'statistics': {},
+            },
+        ]
+
+    def test_runs_full_read_only_lifecycle(self):
+        self.parsed_responses = self._lifecycle_responses()
+        stdout, _, rc = self.run_cmd(
+            [
+                'logs',
+                'run-insights-query',
+                '--log-group-names',
+                '/aws/lambda/fn',
+                '--query-string',
+                'fields @timestamp, @message',
+                '--start-time',
+                _START,
+                '--end-time',
+                _END,
+                '--region',
+                'us-east-1',
+            ],
+            expected_rc=0,
+        )
+        names = [c[0].name for c in self.operations_called]
+        self.assertEqual(
+            names,
+            ['DescribeLogGroups', 'StartQuery', 'GetQueryResults'],
+        )
+        # No mutating operation is ever issued.
+        self.assertFalse(_MUTATING.intersection(names))
+        parsed = json.loads(stdout)
+        self.assertEqual(parsed['row_count'], 1)
+        self.assertEqual(parsed['rows'], [{'@message': 'hello', '@ptr': 'p1'}])
+
+    def test_unknown_query_command_rejected_before_any_call(self):
+        self.parsed_responses = []
+        self.run_cmd(
+            [
+                'logs',
+                'run-insights-query',
+                '--log-group-names',
+                '/aws/lambda/fn',
+                '--query-string',
+                'boguscmd @message',
+                '--start-time',
+                _START,
+                '--end-time',
+                _END,
+                '--region',
+                'us-east-1',
+            ],
+            # Pre-dispatch bad input -> ParamValidationError (rc 252).
+            expected_rc=252,
+        )
+        # Nothing was dispatched to AWS.
+        self.assertEqual(self.operations_called, [])
