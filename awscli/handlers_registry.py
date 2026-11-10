@@ -535,6 +535,9 @@ PLUGIN_REGISTRY = {
             'register_agent_toolkit_commands',
         )
     ],
+    'building-command-table.apigateway': [
+        ('awscli.customizations.apigateway.create_lambda_api', 'register'),
+    ],
     'building-command-table.athena': [
         ('awscli.customizations.athena', 'register')
     ],
@@ -610,7 +613,8 @@ PLUGIN_REGISTRY = {
         ('awscli.customizations.wizard.commands', 'register_wizard_commands')
     ],
     'building-command-table.ec2': [
-        ('awscli.customizations.removals', 'register_removals')
+        ('awscli.customizations.ec2.create_vpc_network', 'register'),
+        ('awscli.customizations.removals', 'register_removals'),
     ],
     'building-command-table.ec2-instance-connect': [
         (
@@ -626,6 +630,7 @@ PLUGIN_REGISTRY = {
     ],
     'building-command-table.ecs': [
         ('awscli.customizations.ecs', 'initialize'),
+        ('awscli.customizations.ecs.create_fargate_web_service', 'register'),
         ('awscli.customizations.ecs.diagnose_service', 'register'),
     ],
     'building-command-table.eks': [
@@ -639,7 +644,8 @@ PLUGIN_REGISTRY = {
         ('awscli.customizations.emrcontainers', 'initialize')
     ],
     'building-command-table.events': [
-        ('awscli.customizations.wizard.commands', 'register_wizard_commands')
+        ('awscli.customizations.events.create_lambda_schedule', 'register'),
+        ('awscli.customizations.wizard.commands', 'register_wizard_commands'),
     ],
     'building-command-table.gamelift': [
         ('awscli.customizations.gamelift', 'register_gamelift_commands')
@@ -703,6 +709,7 @@ PLUGIN_REGISTRY = {
     'building-command-table.rds': [
         ('awscli.customizations.rds', 'register_rds_modify_split'),
         ('awscli.customizations.rds', 'register_add_generate_db_auth_token'),
+        ('awscli.customizations.rds.create_database', 'register'),
     ],
     'building-command-table.s3_sync': [
         ('awscli.customizations.s3.s3', 'register_s3_sync_strategies')
